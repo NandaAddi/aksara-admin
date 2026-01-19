@@ -127,6 +127,15 @@
             <button id="btnLogin" onclick="handleLogin()" class="w-full bg-gradient-to-r from-studio-gold to-[#bfa030] text-black py-4 px-6 text-xs uppercase tracking-widest font-bold hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all rounded-lg active:scale-95">
                 Send Magic Link
             </button>
+
+            <div class="relative py-4">
+                <div class="absolute inset-0 flex items-center"><span class="w-full border-t border-white/10"></span></div>
+                <div class="relative flex justify-center text-[10px] uppercase"><span class="bg-[#1a1a1a] px-2 text-gray-500">Or Access With</span></div>
+            </div>
+
+            <button onclick="handleGoogleLogin()" class="w-full bg-white text-black py-4 px-6 text-xs uppercase tracking-widest font-bold hover:bg-gray-200 transition-all rounded-lg flex items-center justify-center gap-3">
+                <i class="fa-brands fa-google text-sm"></i> Google Account
+            </button>
         </div>
         <p id="loginStatus" class="text-center text-xs mt-8 text-gray-600 font-medium"></p>
     </div>
@@ -473,7 +482,11 @@
         // --- CONFIG ---
         const SUPABASE_URL = 'https://rgeshbeiweqnnkbhgoya.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJnZXNoYmVpd2Vxbm5rYmhnb3lhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc2MzcxMTgsImV4cCI6MjA4MzIxMzExOH0.6N7jBP4C0KwHxYA8ymRT1UbN9kTyyQ2O3WV2Umvcdz4';
-        
+        const ALLOWED_ADMIN_EMAILS = [
+            "nnvnxx.10@gmail.com",
+            "rifaldialfan146@gmail.com",
+            "tedijuni18@gmail.com" 
+        ];
         let sb; 
         try { if(window.supabase) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e){}
 
@@ -962,6 +975,84 @@
                 window.location.reload();
             }
         }, 60000); // Cek tiap 1 menit
+
+        // 1. TAMBAHKAN FUNGSI LOGIN GOOGLE BARU
+        async function handleGoogleLogin() {
+            try {
+                const { error } = await sb.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.href // Redirect kembali ke halaman ini
+                    }
+                });
+                if (error) throw error;
+            } catch (error) {
+                alert("Google Login Error: " + error.message);
+            }
+        }
+
+        // 2. MODIFIKASI FUNGSI checkSession YANG SUDAH ADA
+        async function checkSession() {
+            const mainBody = document.getElementById('mainBody') || document.body;
+            mainBody.style.display = 'flex';
+            
+            if(!sb) return;
+
+            const { data: { session } } = await sb.auth.getSession();
+            
+            const loginScreen = document.getElementById('loginScreen');
+            const dashboard = document.getElementById('dashboardLayout');
+
+            if (session) {
+                // --- LOGIC BARU: SECURITY CHECK (WHITELIST) ---
+                // Jika email yang login TIDAK SAMA dengan email admin
+                    if (session) {
+                        // --- LOGIC BARU: SECURITY CHECK (MULTI ADMIN) ---
+                        // Cek apakah email user TIDAK ADA di dalam daftar admin
+                        if (!ALLOWED_ADMIN_EMAILS.includes(session.user.email)) { 
+                            console.warn(`Unauthorized access attempt by: ${session.user.email}`);
+                            
+                            // 1. Tendang User (Logout)
+                            await sb.auth.signOut();
+                            
+                            // 2. Beri peringatan
+                            alert(`AKSES DITOLAK!\nEmail "${session.user.email}" tidak terdaftar sebagai Administrator.`);
+                            
+                            // 3. Reset UI ke login
+                            if(dashboard) dashboard.remove();
+                            if(loginScreen) loginScreen.classList.remove('hidden');
+                            return; 
+                        }
+                        // ------------------------------------------------
+
+                        // Jika lolos (Email ada di daftar), lanjut load dashboard...
+                        if(loginScreen) loginScreen.remove();
+                        // ... dst (kode bawahnya tetap sama)
+                    }
+                // ------------------------------------------------
+
+                // JIKA LOLOS PENGECEKAN (Email Cocok)
+                if(loginScreen) loginScreen.remove();
+                
+                if(dashboard) {
+                    dashboard.classList.remove('hidden');
+                    dashboard.classList.add('flex');
+                }
+                
+                // Load data
+                loadProjectList(); 
+                loadLinks(); 
+                loadCurrentPopup();
+                loadShortlinks();
+                setupLivePreview();
+                setupDragAndDrop(); 
+
+            } else {
+                // --- JIKA TIDAK ADA SESI ---
+                if(dashboard) dashboard.remove();
+                if(loginScreen) loginScreen.classList.remove('hidden');
+            }
+        }
         
         checkSession();
     </script>
