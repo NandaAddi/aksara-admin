@@ -1461,7 +1461,10 @@
         }
 
         function copyToClipboard(text) {
-            navigator.clipboard.writeText("https://" + text).then(() => { alert("Link copied: https://" + text); });
+            // Use Hash format for maximum reliability
+            // text is usually "domain.com/slug" -> we want "domain.com/#/slug"
+            const finalUrl = "https://" + text.replace("aksarapicture.web.id/", "aksarapicture.web.id/#/");
+            navigator.clipboard.writeText(finalUrl).then(() => { alert("Safe Link copied: " + finalUrl); });
         }
 
         // Idle Timer
