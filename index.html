@@ -2012,15 +2012,32 @@
             checkSession();
         }
 
-        // Routing Logic for Shortlinks
+        // Routing Logic for Shortlinks (Universal)
         async function handleRouting() {
             const path = window.location.pathname;
-            // Ignore root, index.html, or admin specific paths if any
-            if (path === '/' || path === '/index.html' || path.includes('.')) return false;
+            let slug = "";
 
-            // Extract potential slug (e.g. /myslug -> myslug)
-            const slug = path.substring(1); // Remove leading slash
-            if (!slug) return false;
+            // 1. Check Path
+            if (path !== '/' && path !== '/index.html' && !path.includes('.')) {
+                slug = path.substring(1);
+            }
+
+            // 2. Check Hash (Fallback)
+            if (!slug && window.location.hash) {
+                const hash = window.location.hash;
+                if (hash.startsWith('#/')) slug = hash.substring(2);
+                else if (hash.startsWith('#')) slug = hash.substring(1);
+            }
+
+            // 3. Check Query (Fallback)
+            if (!slug && window.location.search) {
+                const params = new URLSearchParams(window.location.search);
+                slug = params.keys().next().value;
+                if (params.has('s')) slug = params.get('s');
+            }
+
+            // Filter valid slug
+            if (!slug || slug === '/' || slug === 'index.html' || slug.includes('.')) return false;
 
             // Found a slug, take over UI
             const mainBody = document.getElementById('mainBody');
