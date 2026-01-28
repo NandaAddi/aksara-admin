@@ -1461,10 +1461,12 @@
         }
 
         function copyToClipboard(text) {
-            // Use Hash format for maximum reliability
-            // text is usually "domain.com/slug" -> we want "domain.com/#/slug"
-            const finalUrl = "https://" + text.replace("aksarapicture.web.id/", "aksarapicture.web.id/#/");
-            navigator.clipboard.writeText(finalUrl).then(() => { alert("Safe Link copied: " + finalUrl); });
+            // Use bit. subdomain if standard
+            const parts = text.split('/');
+            const slug = parts[parts.length - 1];
+            // Format: bit.aksarapicture.web.id/slug
+            const finalUrl = `https://bit.aksarapicture.web.id/${slug}`;
+            navigator.clipboard.writeText(finalUrl).then(() => { alert("Bit Link copied: " + finalUrl); });
         }
 
         // Idle Timer
@@ -2012,34 +2014,55 @@
             checkSession();
         }
 
-        // Routing Logic for Shortlinks (Universal)
+        // Routing Logic for Shortlinks (Subdomain + Universal)
         async function handleRouting() {
+            const hostname = window.location.hostname;
             const path = window.location.pathname;
             let slug = "";
 
-            // 1. Check Path
-            if (path !== '/' && path !== '/index.html' && !path.includes('.')) {
+            // --- STRATEGY 1: Subdomain Mode (bit.aksarapicture.web.id) ---
+            if (hostname.startsWith('bit.')) {
+
+                // If on subdomain, EVERYTHING is a shortlink except root
+                if (path === '/' || path === '/index.html') {
+                    // Redirect root subdomain to main domain? or show generic msg?
+                    // Let's redirect to main for now
+                    window.location.href = 'https://aksarapicture.web.id';
+                    return true;
+                }
+
+                // Extract slug from path (e.g. /myslug)
                 slug = path.substring(1);
             }
+            // --- STRATEGY 2: Main Domain Mode (Fallback: Hash/Query/Path) ---
+            else {
+                // 1. Check Path
+                if (path !== '/' && path !== '/index.html' && !path.includes('.')) {
+                    slug = path.substring(1);
+                }
 
-            // 2. Check Hash (Fallback)
-            if (!slug && window.location.hash) {
-                const hash = window.location.hash;
-                if (hash.startsWith('#/')) slug = hash.substring(2);
-                else if (hash.startsWith('#')) slug = hash.substring(1);
+                // 2. Check Hash
+                if ((!slug || slug === 'index.html') && window.location.hash) {
+                    const h = window.location.hash;
+                    if (h.startsWith('#/')) slug = h.substring(2);
+                    else if (h.startsWith('#')) slug = h.substring(1);
+                }
+
+                // 3. Check Query
+                if ((!slug || slug === 'index.html') && window.location.search) {
+                    const p = new URLSearchParams(window.location.search);
+                    slug = p.keys().next().value;
+                    if (p.has('s')) slug = p.get('s');
+                }
             }
 
-            // 3. Check Query (Fallback)
-            if (!slug && window.location.search) {
-                const params = new URLSearchParams(window.location.search);
-                slug = params.keys().next().value;
-                if (params.has('s')) slug = params.get('s');
-            }
+            // Clean Slug
+            if (slug) slug = slug.replace(/\/$/, ""); // remove trailing slash
 
-            // Filter valid slug
+            // Validate Slug Validity
             if (!slug || slug === '/' || slug === 'index.html' || slug.includes('.')) return false;
 
-            // Found a slug, take over UI
+            // --- UI TAKEOVER ---
             const mainBody = document.getElementById('mainBody');
             const loginScreen = document.getElementById('loginScreen');
             const dashboard = document.getElementById('dashboardLayout');
@@ -2054,24 +2077,27 @@
                 redirectScreen.classList.add('flex');
             }
 
+            // --- DEBUG INFO (Optional: remove in prod if strict) ---
+            console.log("Resolving slug:", slug);
+
             try {
                 const { data, error } = await sb.from('shortlinks').select('original_url, id, clicks').eq('slug', slug).single();
 
                 if (error || !data) {
-                    // Shortlink not found
+                    // Not Found
                     document.getElementById('redirectStatus').classList.add('hidden');
                     document.getElementById('redirectError').classList.remove('hidden');
                     return true;
                 }
 
-                // Shortlink found
+                // Found
                 document.getElementById('redirectMsg').textContent = `Redirecting to destination...`;
 
-                // Increment Click Count (Background process, don't await blocking)
+                // Update Stats
                 const newClicks = (data.clicks || 0) + 1;
                 sb.from('shortlinks').update({ clicks: newClicks }).eq('id', data.id).then(() => { });
 
-                // Artificial Delay for Branding (1.5s)
+                // Redirect
                 setTimeout(() => {
                     window.location.href = data.original_url;
                 }, 1500);
